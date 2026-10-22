@@ -1,7 +1,8 @@
 const status = document.querySelector("#status"),
   result = document.querySelector("#result"),
   button = document.querySelector("#send"),
-  confirm = document.querySelector("#confirm");
+  confirm = document.querySelector("#confirm"),
+  recipient = document.querySelector("#recipient");
 let settings;
 function update() {
   button.disabled = !(
@@ -9,7 +10,9 @@ function update() {
     settings.connected &&
     settings.enabled &&
     !settings.used &&
-    confirm.checked
+    confirm.checked &&
+    recipient.value.trim() &&
+    recipient.checkValidity()
   );
 }
 async function load() {
@@ -20,9 +23,6 @@ async function load() {
   settings = data;
   document.querySelector("#sender").textContent =
     data.sender || "Não configurado";
-  document
-    .querySelectorAll(".recipient")
-    .forEach((e) => (e.textContent = data.recipient || "Não configurado"));
   status.textContent = !data.configured
     ? "Configure as credenciais no backend."
     : data.used
@@ -35,6 +35,16 @@ async function load() {
   update();
 }
 confirm.onchange = update;
+recipient.oninput = () => {
+  confirm.checked = false;
+  document
+    .querySelectorAll(".recipient")
+    .forEach(
+      (e) =>
+        (e.textContent = recipient.value.trim() || "destinatário escolhido"),
+    );
+  update();
+};
 button.onclick = async () => {
   if (button.disabled) return;
   button.disabled = true;
@@ -42,7 +52,14 @@ button.onclick = async () => {
   try {
     const r = await fetch("/api/google/send-test", {
       method: "POST",
-      headers: { "X-Test-CSRF": settings.csrf },
+      headers: {
+        "X-Test-CSRF": settings.csrf,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: recipient.value.trim(),
+        confirmed: true,
+      }),
     });
     const data = await r.json();
     result.textContent = data.message || data.error;

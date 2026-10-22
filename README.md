@@ -21,7 +21,7 @@ Configure via segredos/ambiente do servidor, nunca no navegador ou no repositór
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: cliente OAuth Web do Google Cloud.
 - `APP_ORIGIN`: origem HTTPS exata do aplicativo, sem barra final.
 - `OAUTH_OWNER_USER_ID`: ID Bitrix24 do proprietário admitido pelo gateway. O backend exige o header `X-Vibe-User-Id` correspondente; não exponha esse serviço fora do gateway Black Hole.
-- `TEST_EMAIL_SENDER`, `TEST_EMAIL_RECIPIENT`: únicos remetente/destinatário admitidos, configurados pelo operador.
+- `TEST_EMAIL_SENDER`: única conta remetente admitida, configurada pelo operador. O proprietário escolhe um único destinatário na interface.
 - `TEST_EMAIL_ENABLED`: somente o valor literal `true` libera a tentativa manual restrita. Não habilita campanhas.
 - `OAUTH_DATA_DIR`: diretório durável fora de `/opt/app`, declarado em `dataDirs` no deploy. Não coloque tokens ou a chave de criptografia na árvore limpa pelo deploy.
 
@@ -33,7 +33,7 @@ Tokens ficam criptografados com AES-256-GCM em SQLite; a chave aleatória é cri
 
 ## Limites do teste
 
-`GET /api/google/status` informa somente configuração pública, estado da conexão e token CSRF da sessão. `POST /api/google/send-test` exige proprietário autenticado, origem exata, cookie da sessão e token CSRF. Não recebe remetente, destinatário, assunto, conteúdo ou anexos do navegador. O corpo e os endereços são fixados no backend; Bcc/Cc e campanhas não existem nesse fluxo.
+`GET /api/google/status` informa somente configuração pública, estado da conexão e token CSRF da sessão. `POST /api/google/send-test` exige proprietário autenticado, origem exata, cookie da sessão e token CSRF. Recebe somente `{ recipient, confirmed: true }`: um endereço simples validado e confirmação explícita. Não aceita remetente, assunto, corpo, anexos, arrays ou cópias. Remetente e conteúdo são fixados no backend. Trocar o destinatário desmarca a confirmação na interface. Bcc/Cc e campanhas não existem nesse fluxo.
 
 Há **uma tentativa total por banco**, reservada de forma atômica antes da chamada Gmail. Timeout ou resultado desconhecido consomem a tentativa, sem retry automático. Mesmo após reinício/redeploy, o teste não será repetido. O operador precisa investigar qualquer resultado desconhecido; não apague o banco para repetir sem verificar a caixa Enviados e o destinatário. Aceitação pelo Gmail não garante entrega na caixa de entrada.
 
@@ -41,7 +41,7 @@ O botão exige confirmação explícita na interface. Não é efetuado nenhum en
 
 ## Testes e versões
 
-Testes usam somente credenciais fictícias e cliente Google simulado: vínculo proprietário, state/cookie/nonce, conta remetente, criptografia, reinício, CSRF, origem, destinatário fixo e limite persistente. Não acessam Gmail real.
+Testes usam somente credenciais fictícias e cliente Google simulado: vínculo proprietário, state/cookie/nonce, conta remetente, criptografia, reinício, CSRF, origem, destinatário único validado e limite persistente. Não acessam Gmail real.
 
 A versão 2 local com persistência de campanhas/CRM permanece em `development/v2-local-persistence`, sem alterações por este fluxo. Nenhum CRM real é modificado por esta demonstração.
 

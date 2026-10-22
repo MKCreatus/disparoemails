@@ -12,6 +12,7 @@ async function fixture({
   identityEmail = SENDER,
   failSend = false,
   wrongNonce = false,
+  expectedRecipient = RECIPIENT,
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "gmail-test-"));
   const calls = { exchange: 0, send: 0 };
@@ -54,7 +55,7 @@ async function fixture({
       assert.equal(options.retry, false);
       const raw = Buffer.from(options.data.raw, "base64url").toString();
       assert.match(raw, new RegExp("From: " + SENDER));
-      assert.match(raw, new RegExp("To: " + RECIPIENT));
+      assert.match(raw, new RegExp("To: " + expectedRecipient));
       assert.ok(!raw.includes("Bcc:"));
       if (failSend) throw new Error("dummy-refresh-sensitive");
       return { data: { id: "test-message" } };
@@ -76,7 +77,6 @@ async function fixture({
     dataDir: dir,
     ownerId: "75",
     sender: SENDER,
-    recipient: RECIPIENT,
     enabled,
     client,
     clientId: "dummy-client",
@@ -85,8 +85,16 @@ async function fixture({
   const request = (path, options = {}) =>
     fetch(origin + path, {
       redirect: "manual",
+      body:
+        options.method === "POST"
+          ? JSON.stringify({ recipient: RECIPIENT, confirmed: true })
+          : undefined,
       ...options,
-      headers: { "X-Vibe-User-Id": "75", ...options.headers },
+      headers: {
+        "X-Vibe-User-Id": "75",
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
     });
   async function connect() {
     const start = await request("/oauth/google/start");
@@ -120,7 +128,6 @@ async function fixture({
         dataDir: dir,
         ownerId: "75",
         sender: SENDER,
-        recipient: RECIPIENT,
         enabled,
         client,
         clientId: "dummy-client",
@@ -307,5 +314,58 @@ test("state sem cookie e nonce incorreto são recusados antes de vincular conta"
     assert.equal((await bad.session()).data.connected, false);
   } finally {
     await bad.close();
+  }
+});
+
+test("destinatário escolhido admite só um endereço e rejeita cópias, listas e injeção de headers", async () => {
+  const f = await fixture({ expectedRecipient: "chosen@example.org" });
+  try {
+    await f.connect();
+    const { data, cookie } = await f.session();
+    const headers = {
+      Cookie: cookie,
+      Origin: f.origin,
+      "X-Test-CSRF": data.csrf,
+    };
+    for (const input of [
+      { recipient: ["a@example.com"], confirmed: true },
+      { recipient: "a@example.com,b@example.com", confirmed: true },
+      { recipient: "a@example.com\r\nBcc: b@example.com", confirmed: true },
+      { recipient: "a@example.com", confirmed: false },
+      { recipient: "a@example.com", confirmed: true, cc: "b@example.com" },
+      {
+        recipient: "a@example.com",
+        confirmed: true,
+        from: "other@example.com",
+      },
+    ]) {
+      assert.equal(
+        (
+          await f.request("/api/google/send-test", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(input),
+          })
+        ).status,
+        400,
+      );
+    }
+    assert.equal(f.calls.send, 0);
+    assert.equal(
+      (
+        await f.request("/api/google/send-test", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            recipient: "chosen@example.org",
+            confirmed: true,
+          }),
+        })
+      ).status,
+      200,
+    );
+    assert.equal(f.calls.send, 1);
+  } finally {
+    await f.close();
   }
 });
