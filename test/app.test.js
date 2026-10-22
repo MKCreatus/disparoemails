@@ -12,3 +12,11 @@ test('CSV rejeita formato inválido e arquivo grande',()=>{assert.throws(()=>par
 test('raiz e módulos disponíveis com proteção de rede no navegador',async()=>{for(const path of ['/','/app.js','/domain.js','/style.css']){const r=await fetch(base+path);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/connect-src 'none'/);}});
 test('endpoint de envio não aceita mutação',async()=>{const r=await fetch(base+'/api/send',{method:'POST'});assert.equal(r.status,403);});
 test('saúde informa modo demo e caminhos desconhecidos são recusados',async()=>{assert.equal((await(await fetch(base+'/health')).json()).sendingEnabled,false);assert.equal((await fetch(base+'/missing')).status,404);});
+
+test('incorporação Bitrix24 aceita parâmetros sem mudar a rota ou refletir tokens',async()=>{
+ const query='?placement=LEFT_MENU&member_id=demo&placement_options=%7B%7D&__init=example-not-a-real-token';
+ const r=await fetch(base+'/'+query);assert.equal(r.status,200);const html=await r.text();assert.match(html,/Envio de e-mails/);assert.ok(!html.includes('example-not-a-real-token'));
+ assert.equal((await fetch(base+'/app.js?v=1')).status,200);
+ assert.equal((await(await fetch(base+'/health'+query)).json()).sendingEnabled,false);
+ assert.equal((await fetch(base+'/missing'+query)).status,404);
+});
