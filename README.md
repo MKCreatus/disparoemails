@@ -1,48 +1,53 @@
-# Envio de e-mails — demonstração e teste Google Workspace
+# Envio de e-mails — Google Workspace integrado
 
-Campanhas da demonstração continuam sem envio. Há um fluxo separado e restrito para **um único e-mail manual**, condicionado à configuração do backend e à autorização OAuth da conta remetente.
+App privado de campanhas com Google Workspace na navegação principal, SQLite para rascunhos/modelos/listas e envio manual para **um destinatário ou uma lista**. Não há integração automática com CRM, agendamento ou envio ao abrir páginas.
 
-## Execução
+## Como usar
 
-Node.js 24 ou superior (OAuth usa SQLite nativo):
+1. Em **Google Workspace**, confira a conexão da conta remetente. A autorização do Google continua abrindo em outra aba, pois o Google não permite esse login no iframe do Bitrix24. Retorne ao app e clique em Atualizar conexão. Tokens nunca chegam ao navegador.
+2. Em **Contatos**, crie uma lista e importe CSV (coluna obrigatória `email`; opcionais `nome`, `empresa`). E-mails são normalizados e deduplicados dentro da lista. A importação persiste no servidor e não autoriza envios por si só.
+3. Em **Modelos de e-mail**, edite conteúdo textual. `{{nome}}` será substituído pelo nome do destinatário; para destinatário único sem nome, fica vazio.
+4. Em **Campanhas**, crie um rascunho com assunto, modelo e lista. Salve e clique em Revisar e enviar. Escolha um endereço único ou a lista da campanha.
+5. Gere a prévia. Confira remetente, assunto, conteúdo e os destinatários efetivos. Confirme a autorização dos destinatários e o envio real. Só então clique em Enviar campanha.
+6. Acompanhe em **Envios**. Atualizar consulta o resultado. Há ações para cancelar pendentes e continuar somente os pendentes de um envio pausado. **Relatórios** exporta resultados reais de processamento, sem alegar entrega ou abertura.
+7. Em **Supressões**, bloqueie um endereço com motivo (descadastro, reclamação etc.). A supressão é conferida na prévia e novamente antes de processar cada mensagem. Uma mensagem já em trânsito pode ter sido aceita antes do bloqueio.
 
-```sh
-npm ci
-npm start
-npm test
-```
+## Limites e garantias práticas
 
-Interface em `http://localhost:3000/`; painel de conexão em `/google.html`. O OAuth de produção exige HTTPS e o gateway autenticado VibeCode em `OWNER_ONLY`. Nenhuma credencial é necessária para visualizar a demonstração, e o teste real permanece desativado por padrão.
+- Limites iniciais locais: **50 destinatários por envio e 100 em uma janela móvel de 24 horas**. A cota inclui destinatários reservados, ainda pendentes, cancelados e sem confirmação; é conservadora. Os limites e políticas próprios do Google Workspace continuam valendo.
+- Mensagens individuais, sem Cc/Bcc, anexos ou HTML livre. Assunto codificado em UTF-8, conteúdo textual e sem exposição da lista aos outros destinatários.
+- Confirmação manual da prévia e da permissão dos destinatários é obrigatória. A declaração é registrada no envio; o app não verifica automaticamente consentimento nem concede consentimento a contatos importados.
+- Contatos demonstrativos, suprimidos e consentimentos explicitamente revogados não são enviados. O restante exige a confirmação do proprietário na revisão.
+- A prévia é invalidada se campanha, modelo, remetente ou lista mudar. Conteúdo e audiência são congelados ao registrar o envio.
+- Um envio por campanha. Repetir a mesma requisição retorna o registro anterior; uma campanha já enviada não pode ser editada, excluída ou reenviada. Para outra campanha, crie novo rascunho e revise novamente.
+- Fila durável SQLite com um trabalhador por processo, intervalo de dois segundos, sem retry automático de envio. Antes de chamar Gmail o destinatário é marcado como em trânsito. Após falha/timeout ou queda nessa fase, seu resultado é desconhecido, a fila pausa e ele nunca é reenviado automaticamente. Confira Enviados e a caixa destinatária antes de decidir outra ação.
+- Aceitação pelo Gmail não prova entrega, leitura ou abertura. Nenhum tracking real é implementado.
+- Um processo Node por banco. Não executar réplicas concorrentes sobre os mesmos arquivos SQLite. Não há garantia distribuída de exactly-once com serviços externos.
+- O servidor pode dormir após inatividade, conforme a configuração da hospedagem. A fila continua do estado durável ao iniciar novamente; trabalhos pendentes e já confirmados não exigem nova confirmação. Isso não é agendamento nem serviço contínuo de grande volume.
 
-## Configuração do backend
+## Execução e configuração
 
-Configure via segredos/ambiente do servidor, nunca no navegador ou no repositório:
+Node.js 24+. `npm ci`, `npm start`, `npm test`. A demonstração estática pode abrir localmente, mas dados privados e mutações exigem a identidade autenticada do gateway VibeCode. Não falsifique headers nem exponha a API diretamente à internet. Para desenvolvimento/testes, `createApplication` aceita armazenamento e Google simulados.
 
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: cliente OAuth Web do Google Cloud.
-- `APP_ORIGIN`: origem HTTPS exata do aplicativo, sem barra final.
-- `OAUTH_OWNER_USER_ID`: ID Bitrix24 do proprietário admitido pelo gateway. O backend exige o header `X-Vibe-User-Id` correspondente; não exponha esse serviço fora do gateway Black Hole.
-- `TEST_EMAIL_SENDER`: única conta remetente admitida, configurada pelo operador. O proprietário escolhe um único destinatário na interface.
-- `TEST_EMAIL_ENABLED`: somente o valor literal `true` libera a tentativa manual restrita. Não habilita campanhas.
-- `OAUTH_DATA_DIR`: diretório durável fora de `/opt/app`, declarado em `dataDirs` no deploy. Não coloque tokens ou a chave de criptografia na árvore limpa pelo deploy.
+Variáveis do backend (nunca versionar valores reais):
 
-No Google Cloud, registre exatamente `APP_ORIGIN` + `/oauth/google/callback` como URI de redirecionamento do cliente Web. Origens JavaScript não são necessárias. Confirme Gmail API ativa, público interno e permissões `openid`, `email` e `https://www.googleapis.com/auth/gmail.send`. Autorize na conta remetente, fora do iframe (o link abre o painel em outra aba). O administrador Workspace pode precisar liberar o aplicativo.
+- `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`: segredos do cliente OAuth Google já cadastrado.
+- `APP_ORIGIN`: origem HTTPS exata. URI de retorno no Google Cloud: `APP_ORIGIN` + `/oauth/google/callback`.
+- `OAUTH_OWNER_USER_ID`: proprietário permitido pelo header confiável `X-Vibe-User-Id`. Acesso da hospedagem permanece `OWNER_ONLY`.
+- `TEST_EMAIL_SENDER`: conta remetente admitida. O OAuth valida endereço exato, domínio Workspace, identidade verificada, nonce e escopo `gmail.send` (além de `openid` e `email`).
+- `OAUTH_DATA_DIR`: diretório durável **existente**, fora de `/opt/app`, com `oauth.sqlite` e `encryption.key`. Não mudar, apagar ou substituir ao atualizar: preserva a autorização já concedida. Tokens ficam criptografados AES-256-GCM e protegidos por arquivo de chave privado. Os dois devem ser protegidos nos backups.
+- `DATABASE_PATH`: arquivo SQLite durável separado para campanhas, listas, supressões e envios, fora de `/opt/app`.
+- `CAMPAIGN_SEND_ENABLED=true`: habilita o envio manual descrito acima. Ausente ou outro valor bloqueia a criação de envios e o trabalhador.
+- `TEST_EMAIL_ENABLED`: controla apenas o teste inicial legado em `/google.html`, independente das campanhas. O limite de uma tentativa do teste legado é preservado, sem reset. Recomenda-se desativá-lo após a integração.
 
-O OAuth utiliza state vinculado a cookie HttpOnly/Secure/SameSite=Lax, validade de dez minutos, consumo único, nonce e PKCE S256. A biblioteca oficial Google valida assinatura, emissor, audiência e validade do ID token. O backend verifica endereço exato, e-mail verificado e domínio Workspace. Não são aceitas outras contas ou autorização sem refresh token/escopo de envio.
+Declare os diretórios persistentes em `dataDirs` no deploy. Um clean deploy só deve substituir `/opt/app`; não colocar bancos, tokens ou chave de criptografia no pacote. O gateway deve encaminhar a porta 3000 para `node server.js`, que respeita `PORT`. Nenhuma credencial Google é gravada na imagem ou frontend.
 
-Tokens ficam criptografados com AES-256-GCM em SQLite; a chave aleatória é criada em arquivo privado separado no mesmo diretório durável. Proteja o diretório e seus backups. Isso protege o banco isolado, não contra um administrador com acesso ao banco e à chave. URLs OAuth, códigos, tokens e credenciais não são registrados pelo aplicativo.
+A API de campanhas exige proprietário, origem exata e token CSRF emitido pelo backend. Para funcionar dentro do iframe, esse token é validado no header sem depender de cookie de terceiro; sua leitura continua restrita à mesma origem e ao proprietário. O fluxo OAuth continua protegido por state vinculado a cookie Secure/HttpOnly, nonce, PKCE e verificação da biblioteca oficial Google. Não há logs de tokens ou URLs OAuth.
 
-## Limites do teste
+`/health` informa `sendingEnabled` para campanhas e `restrictedTestEnabled` para o teste legado. `GET /api/state` consulta os dados privados; `POST /api/campaigns/:id/preview` prepara a revisão e `POST /api/campaigns/:id/send` registra a fila somente com as confirmações. Nenhuma chamada genérica `/api/send` foi habilitada. Nenhum CRM é alterado.
 
-`GET /api/google/status` informa somente configuração pública, estado da conexão e token CSRF da sessão. `POST /api/google/send-test` exige proprietário autenticado, origem exata, cookie da sessão e token CSRF. Recebe somente `{ recipient, confirmed: true }`: um endereço simples validado e confirmação explícita. Não aceita remetente, assunto, corpo, anexos, arrays ou cópias. Remetente e conteúdo são fixados no backend. Trocar o destinatário desmarca a confirmação na interface. Bcc/Cc e campanhas não existem nesse fluxo.
+## Validação e pendências
 
-Há **uma tentativa total por banco**, reservada de forma atômica antes da chamada Gmail. Timeout ou resultado desconhecido consomem a tentativa, sem retry automático. Mesmo após reinício/redeploy, o teste não será repetido. O operador precisa investigar qualquer resultado desconhecido; não apague o banco para repetir sem verificar a caixa Enviados e o destinatário. Aceitação pelo Gmail não garante entrega na caixa de entrada.
+Testes automatizados usam somente dados fictícios e Google simulado: persistência, CRUD, CSRF, OAuth, confirmação, idempotência, limite por lista/24h, supressão, revogação, pausa, cancelamento e recuperação após interrupção. Verificação em Chromium do fluxo integrado é feita sem acesso externo. Nenhum e-mail real é enviado pelos testes ou pelo deploy.
 
-O botão exige confirmação explícita na interface. Não é efetuado nenhum envio durante conexão OAuth ou testes automatizados. `sendingEnabled=false` permanece no `/health` para campanhas; `restrictedTestEnabled` informa separadamente se a exceção manual está configurada no ambiente. A função de envio de campanhas continua lançando erro e `/api/send` continua bloqueado.
-
-## Testes e versões
-
-Testes usam somente credenciais fictícias e cliente Google simulado: vínculo proprietário, state/cookie/nonce, conta remetente, criptografia, reinício, CSRF, origem, destinatário único validado e limite persistente. Não acessam Gmail real.
-
-A versão 2 local com persistência de campanhas/CRM permanece em `development/v2-local-persistence`, sem alterações por este fluxo. Nenhum CRM real é modificado por esta demonstração.
-
-A política `data.uiDesign` versão 2 permanece pendente; não há declaração de conformidade. Este modo restrito não atende envio em massa nem a meta futura de 300 mil e-mails/mês.
+A interface inclui exemplos de métricas claramente marcados como simulados; os relatórios de envio usam registros reais. A meta futura de mais de 300 mil e-mails/mês exige outra arquitetura e provedor/capacidade aprovados, e não é suportada por esta versão. A política `data.uiDesign` versão 2 permanece pendente; não há declaração de conformidade.

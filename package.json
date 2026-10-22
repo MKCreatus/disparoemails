@@ -1,6 +1,6 @@
 {
   "name": "envio-de-emails",
-  "version": "0.1.2",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/app.test.js test/google.test.js"
+    "test": "node --test test/app.test.js test/google.test.js test/persistence.test.js test/delivery.test.js test/campaign-api.test.js"
   },
   "dependencies": {
     "google-auth-library": "^10.3.0"

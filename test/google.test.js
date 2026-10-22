@@ -117,6 +117,8 @@ async function fixture({
   return {
     dir,
     calls,
+    sendCampaign: (message) => app.sendCampaignMessage(message),
+    authorize: (req) => app.authorize(req, true),
     request,
     connect,
     session,
@@ -365,6 +367,33 @@ test("destinatário escolhido admite só um endereço e rejeita cópias, listas 
       200,
     );
     assert.equal(f.calls.send, 1);
+  } finally {
+    await f.close();
+  }
+});
+
+test("autorização de campanha exige proprietário, origem exata e token CSRF emitido pelo app", async () => {
+  const f = await fixture();
+  try {
+    const { data } = await f.session();
+    const headers = {
+      "x-vibe-user-id": "75",
+      origin: f.origin,
+      "x-test-csrf": data.csrf,
+    };
+    assert.equal(f.authorize({ headers }), true);
+    assert.equal(
+      f.authorize({ headers: { ...headers, origin: "https://other.example" } }),
+      false,
+    );
+    assert.equal(
+      f.authorize({ headers: { ...headers, "x-vibe-user-id": "99" } }),
+      false,
+    );
+    assert.equal(
+      f.authorize({ headers: { ...headers, "x-test-csrf": "invalid" } }),
+      false,
+    );
   } finally {
     await f.close();
   }
