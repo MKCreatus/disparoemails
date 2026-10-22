@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Google Workspace · teste restrito</title>
+    <link rel="icon" href="/_gw/icon" />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/google.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <strong>Envio de e-mails · Google Workspace</strong
+        ><a href="/">Voltar ao aplicativo</a>
+      </header>
+      <h1>Um único e-mail de teste</h1>
+      <div class="panel">
+        <p>
+          Remetente: <strong><span id="sender">Aguardando conexão</span></strong
+          ><br />Destinatário autorizado:
+          <strong
+            ><span class="recipient">destinatário configurado</span></strong
+          >
+        </p>
+        <p>
+          O conteúdo é fixo. Sem anexos, cópias ou campanhas. Apenas uma
+          tentativa é permitida, mesmo se o resultado não puder ser confirmado.
+        </p>
+        <p id="status" role="status">Verificando configuração…</p>
+        <a class="button" href="/oauth/google/start" id="connect"
+          >Conectar conta Google Workspace</a
+        >
+        <p>
+          A conexão deve ser concluída nesta aba, fora do iframe do Bitrix24.
+          Selecione exclusivamente a conta remetente.
+        </p>
+        <label
+          ><input type="checkbox" id="confirm" /> Autorizo enviar agora o único
+          e-mail de teste para
+          <span class="recipient">destinatário configurado</span>.</label
+        ><button disabled id="send">Enviar único teste real</button>
+        <p id="result" role="status" aria-live="polite"></p>
+      </div>
+    </main>
+  </body>
+</html>

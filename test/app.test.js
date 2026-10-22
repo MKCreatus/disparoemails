@@ -9,7 +9,7 @@ test('envios são bloqueados por código',()=>{assert.equal(sendingEnabled,false
 test('CSV aceita BOM, aspas, separadores e linhas internas',()=>{const r=parseCSV('\uFEFFnome;email;empresa\r\n"Ana; Demo";ANA@example.com;"Linha\nDois"');assert.equal(r.contacts[0].nome,'Ana; Demo');assert.equal(r.contacts[0].email,'ana@example.com');assert.equal(r.contacts[0].empresa,'Linha\nDois');});
 test('CSV conta inválidos e duplicados',()=>{const r=parseCSV('email\na@example.com\na@example.com\ninválido\n');assert.equal(r.contacts.length,1);assert.equal(r.duplicates,1);assert.equal(r.invalid,1);});
 test('CSV rejeita formato inválido e arquivo grande',()=>{assert.throws(()=>parseCSV('nome\nAna'),/coluna email/);assert.throws(()=>parseCSV('email\n"aberto'),/não fechado/);assert.throws(()=>parseCSV('x'.repeat(2_000_001)),/2 MB/);});
-test('raiz e módulos disponíveis com proteção de rede no navegador',async()=>{for(const path of ['/','/app.js','/domain.js','/style.css']){const r=await fetch(base+path);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/connect-src 'none'/);}});
+test('raiz e módulos disponíveis com proteção de rede no navegador',async()=>{for(const path of ['/','/app.js','/domain.js','/style.css']){const r=await fetch(base+path);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/connect-src 'self'/);}});
 test('endpoint de envio não aceita mutação',async()=>{const r=await fetch(base+'/api/send',{method:'POST'});assert.equal(r.status,403);});
 test('saúde informa modo demo e caminhos desconhecidos são recusados',async()=>{assert.equal((await(await fetch(base+'/health')).json()).sendingEnabled,false);assert.equal((await fetch(base+'/missing')).status,404);});
 

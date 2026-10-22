@@ -1,37 +1,48 @@
-# Envio de e-mails
+# Envio de e-mails — demonstração e teste Google Workspace
 
-Protótipo demonstrativo para Alaio VibeCode e futura integração com Bitrix24.
+Campanhas da demonstração continuam sem envio. Há um fluxo separado e restrito para **um único e-mail manual**, condicionado à configuração do backend e à autorização OAuth da conta remetente.
 
-## Executar
+## Execução
 
-Node.js 22 ou superior. Sem dependências externas.
+Node.js 24 ou superior (OAuth usa SQLite nativo):
 
 ```sh
+npm ci
 npm start
-# http://localhost:3000
 npm test
 ```
 
-Dashboard, criação e edição de rascunhos, contatos, CSV (até 2 MB, BOM, aspas, vírgula/ponto e vírgula e deduplicação), modelos textuais editáveis e relatórios CSV simulados.
+Interface em `http://localhost:3000/`; painel de conexão em `/google.html`. O OAuth de produção exige HTTPS e o gateway autenticado VibeCode em `OWNER_ONLY`. Nenhuma credencial é necessária para visualizar a demonstração, e o teste real permanece desativado por padrão.
 
-Dados ficam na memória da aba; recarregar restaura os exemplos. Nenhum dado é enviado ao CRM ou a provedores. Consentimento não é validado. Não há persistência ou agendamento.
+## Configuração do backend
 
-## Envios desativados
+Configure via segredos/ambiente do servidor, nunca no navegador ou no repositório:
 
-Não existe provedor, credencial no cliente ou rota de envio. O servidor recusa todos os métodos de mutação com HTTP 403, a função de envio lança erro, e a CSP bloqueia conexões de rede do navegador. `/health` informa `sendingEnabled: false`. Não há configuração para habilitar disparos nesta versão.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: cliente OAuth Web do Google Cloud.
+- `APP_ORIGIN`: origem HTTPS exata do aplicativo, sem barra final.
+- `OAUTH_OWNER_USER_ID`: ID Bitrix24 do proprietário admitido pelo gateway. O backend exige o header `X-Vibe-User-Id` correspondente; não exponha esse serviço fora do gateway Black Hole.
+- `TEST_EMAIL_SENDER`, `TEST_EMAIL_RECIPIENT`: únicos remetente/destinatário admitidos, configurados pelo operador.
+- `TEST_EMAIL_ENABLED`: somente o valor literal `true` libera a tentativa manual restrita. Não habilita campanhas.
+- `OAUTH_DATA_DIR`: diretório durável fora de `/opt/app`, declarado em `dataDirs` no deploy. Não coloque tokens ou a chave de criptografia na árvore limpa pelo deploy.
 
-## Implantação pendente
+No Google Cloud, registre exatamente `APP_ORIGIN` + `/oauth/google/callback` como URI de redirecionamento do cliente Web. Origens JavaScript não são necessárias. Confirme Gmail API ativa, público interno e permissões `openid`, `email` e `https://www.googleapis.com/auth/gmail.send`. Autorize na conta remetente, fora do iframe (o link abre o painel em outra aba). O administrador Workspace pode precisar liberar o aplicativo.
 
-Utilizar exclusivamente o aplicativo já existente, sem criar outro cartão. Antes de implantar, obter e validar a política oficial `data.uiDesign`, `policyVersion=2`, e confirmar a chave vinculada ao cartão pelo procedimento oficial. A interface atual é provisória e não declara conformidade com essa política. Nenhuma implantação foi realizada.
+O OAuth utiliza state vinculado a cookie HttpOnly/Secure/SameSite=Lax, validade de dez minutos, consumo único, nonce e PKCE S256. A biblioteca oficial Google valida assinatura, emissor, audiência e validade do ID token. O backend verifica endereço exato, e-mail verificado e domínio Workspace. Não são aceitas outras contas ou autorização sem refresh token/escopo de envio.
 
-O catálogo `/v1/applications` contém os cartões do painel; `/v1/apps` contém registros OAuth distintos. A criação de infraestrutura reutiliza o vínculo pela chave, não pelo nome. Não executar criação com chave genérica supondo que o mesmo nome seleciona o cartão existente.
+Tokens ficam criptografados com AES-256-GCM em SQLite; a chave aleatória é criada em arquivo privado separado no mesmo diretório durável. Proteja o diretório e seus backups. Isso protege o banco isolado, não contra um administrador com acesso ao banco e à chave. URLs OAuth, códigos, tokens e credenciais não são registrados pelo aplicativo.
 
-Documentação: [catálogo](https://vibecode.bitrix24.com/docs/applications), [descoberta](https://vibecode.bitrix24.com/docs/keys-auth/me), [infraestrutura](https://vibecode.bitrix24.com/docs/infra), [chave do cartão existente](https://vibecode.bitrix24.com/docs/cowork/applications-key).
+## Limites do teste
 
-## Evolução
+`GET /api/google/status` informa somente configuração pública, estado da conexão e token CSRF da sessão. `POST /api/google/send-test` exige proprietário autenticado, origem exata, cookie da sessão e token CSRF. Não recebe remetente, destinatário, assunto, conteúdo ou anexos do navegador. O corpo e os endereços são fixados no backend; Bcc/Cc e campanhas não existem nesse fluxo.
 
-Backend de CRM com autenticação por usuário; consentimento, descadastro e supressão; banco durável; fila persistente com idempotência, retentativas e fila de falhas; agendamento America/Sao_Paulo; provedor autorizado com SPF/DKIM/DMARC, webhooks assinados e limites de envio. A meta de mais de 300 mil e-mails/mês depende dessa infraestrutura e de teste de carga, ainda não implementados.
+Há **uma tentativa total por banco**, reservada de forma atômica antes da chamada Gmail. Timeout ou resultado desconhecido consomem a tentativa, sem retry automático. Mesmo após reinício/redeploy, o teste não será repetido. O operador precisa investigar qualquer resultado desconhecido; não apague o banco para repetir sem verificar a caixa Enviados e o destinatário. Aceitação pelo Gmail não garante entrega na caixa de entrada.
 
-## Validação
+O botão exige confirmação explícita na interface. Não é efetuado nenhum envio durante conexão OAuth ou testes automatizados. `sendingEnabled=false` permanece no `/health` para campanhas; `restrictedTestEnabled` informa separadamente se a exceção manual está configurada no ambiente. A função de envio de campanhas continua lançando erro e `/api/send` continua bloqueado.
 
-7 testes automatizados de CSV, bloqueio de envio, HTTP, CSP e saúde passaram. Sintaxe verificada. Sem validação visual em navegador ou integração real com CRM/provedor.
+## Testes e versões
+
+Testes usam somente credenciais fictícias e cliente Google simulado: vínculo proprietário, state/cookie/nonce, conta remetente, criptografia, reinício, CSRF, origem, destinatário fixo e limite persistente. Não acessam Gmail real.
+
+A versão 2 local com persistência de campanhas/CRM permanece em `development/v2-local-persistence`, sem alterações por este fluxo. Nenhum CRM real é modificado por esta demonstração.
+
+A política `data.uiDesign` versão 2 permanece pendente; não há declaração de conformidade. Este modo restrito não atende envio em massa nem a meta futura de 300 mil e-mails/mês.

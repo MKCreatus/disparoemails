@@ -1,1 +1,16 @@
-{"name":"envio-de-emails","version":"0.1.0","private":true,"type":"module","engines":{"node":">=22"},"scripts":{"start":"node server.js","test":"node --test"}}
+{
+  "name": "envio-de-emails",
+  "version": "0.1.2",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/app.test.js test/google.test.js"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.3.0"
+  }
+}
